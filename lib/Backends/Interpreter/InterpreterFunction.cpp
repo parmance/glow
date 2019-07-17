@@ -152,7 +152,7 @@ Tensor *BoundInterpreterFunction::getOrCreateTensor(const Value *v) {
 }
 
 Tensor *BoundInterpreterFunction::getOrCreateUnownedTensor(
-    const Value *v, const Value *src, llvm::ArrayRef<size_t> offsets) {
+    const Value *v, const Value *src, llvm::ArrayRef<dim_t> offsets) {
   assert(llvm::isa<TensorViewInst>(v) && "Expected a tensor view");
 
   // Pick the tensor.

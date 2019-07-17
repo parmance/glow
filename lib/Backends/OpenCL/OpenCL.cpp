@@ -190,6 +190,15 @@ OpenCLFunction::createProgram(const std::string &source,
   if (program) {
     return program;
   }
+
+  if (DIM_T_BITWIDTH == 32) {
+    combinedOptions.append("-Ddim_t=uint -Dsdim_t=int");
+  } else if (DIM_T_BITWIDTH == 64) {
+    combinedOptions.append("-Ddim_t=ulong -Dsdim_t=long");
+  } else {
+    static_assert(DIM_T_BITWIDTH == 32 || DIM_T_BITWIDTH == 64,
+                  "Unsupported dim_t width.");
+  }
   // Create a new compiled program. This will also add the program to the cache
   // because 'program' is a reference to an existing cache item.
   program = clCreateProgramWithSource(ctx, 1, &src, nullptr, &err);
@@ -552,7 +561,7 @@ void OpenCLFunction::executeNCHWConvolution(
 template <typename T>
 static void topK(Tensor &outW, Tensor &indW, Tensor &inW, size_t k) {
   auto values = outW.getHandle<T>();
-  auto indices = indW.getHandle<int64_t>();
+  auto indices = indW.getHandle<sdim_t>();
   auto in = inW.getHandle<T>();
   size_t n = in.dims().back();
 
@@ -1224,8 +1233,8 @@ Error OpenCLFunction::execute(ExecutionContext *context) {
 
       // Temporary hack to support 3-dim transposes.
       // TODO: support any dimensional transposes.
-      std::vector<size_t> odim_vec = TR->getDest()->getType()->dims();
-      std::vector<size_t> idim_vec = TR->getSrc()->getType()->dims();
+      std::vector<dim_t> odim_vec = TR->getDest()->getType()->dims();
+      std::vector<dim_t> idim_vec = TR->getSrc()->getType()->dims();
       std::vector<unsigned_t> mask = TR->getShuffle();
       while (mask.size() < 4) {
         odim_vec.push_back(1);
@@ -1792,7 +1801,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::SplatNodeKind:
   case Kinded::Kind::TransposeNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
-        {ElemKind::FloatTy, ElemKind::Int8QTy, ElemKind::Int64ITy});
+        {ElemKind::FloatTy, ElemKind::Int8QTy, IndexElemKind});
 
   case Kinded::Kind::PowNodeKind:
   case Kinded::Kind::BatchedReduceAddNodeKind:
@@ -1818,7 +1827,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Int8QTy}, {},
                {MaxPoolNode::ArgmaxIdx}) &&
-           (NI.getOutElemTy(MaxPoolNode::ArgmaxIdx) == ElemKind::Int64ITy);
+           (NI.getOutElemTy(MaxPoolNode::ArgmaxIdx) == IndexElemKind);
 
   case Kinded::Kind::ConvolutionNodeKind:
     if (!NI.getInTy(ConvolutionNode::InputIdx)->isQuantizedType()) {
@@ -1832,7 +1841,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy, ElemKind::Int8QTy}, {},
                {TopKNode::IndicesIdx}) &&
-           (NI.getOutElemTy(TopKNode::IndicesIdx) == ElemKind::Int64ITy);
+           (NI.getOutElemTy(TopKNode::IndicesIdx) == IndexElemKind);
 
   case Kinded::Kind::BatchedAddNodeKind:
     if (!NI.getInTy(BatchedAddNode::BatchIdx)->isQuantizedType()) {
@@ -1846,12 +1855,12 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
   case Kinded::Kind::GatherNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy},
                                                   {GatherNode::IndicesIdx}) &&
-           (NI.getInElemTy(GatherNode::IndicesIdx) == ElemKind::Int64ITy);
+           (NI.getInElemTy(GatherNode::IndicesIdx) == IndexElemKind);
 
   case Kinded::Kind::ScatterDataNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy}, {ScatterDataNode::IndicesIdx}) &&
-           (NI.getInElemTy(ScatterDataNode::IndicesIdx) == ElemKind::Int64ITy);
+           (NI.getInElemTy(ScatterDataNode::IndicesIdx) == IndexElemKind);
 
   case Kinded::Kind::SparseLengthsWeightedSumNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -1859,7 +1868,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
                {SparseLengthsWeightedSumNode::IndicesIdx,
                 SparseLengthsWeightedSumNode::LengthsIdx}) &&
            (NI.getInElemTy(SparseLengthsWeightedSumNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
+            IndexElemKind) &&
            (NI.getInElemTy(SparseLengthsWeightedSumNode::LengthsIdx) ==
             ElemKind::Int32ITy);
 
@@ -1869,10 +1878,10 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
                {MaxPoolGradNode::OriginalOutputForArgmaxIdx,
                 MaxPoolGradNode::GradOfOriginalOutputNamedArgmaxIdx}) &&
            (NI.getInElemTy(MaxPoolGradNode::OriginalOutputForArgmaxIdx) ==
-            ElemKind::Int64ITy) &&
+            IndexElemKind) &&
            (NI.getInElemTy(
                 MaxPoolGradNode::GradOfOriginalOutputNamedArgmaxIdx) ==
-            ElemKind::Int64ITy);
+            IndexElemKind);
 
   case Kinded::Kind::SparseLengthsWeightedSumGradNodeKind:
     // GradOfInputNamedIndicesIdx and GradOfInputNamedLengthsIdx do not need to
@@ -1885,7 +1894,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
                 SparseLengthsWeightedSumGradNode::
                     GradOfInputNamedLengthsIdx}) &&
            (NI.getInElemTy(SparseLengthsWeightedSumGradNode::IndicesIdx) ==
-            ElemKind::Int64ITy) &&
+            IndexElemKind) &&
            (NI.getInElemTy(SparseLengthsWeightedSumGradNode::LengthsIdx) ==
             ElemKind::Int32ITy);
 
@@ -1911,10 +1920,13 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
                                                   {CmpLTENode::ResultIdx}) &&
            (NI.getOutElemTy(CmpLTENode::ResultIdx) == ElemKind::BoolTy);
 
+  // We just clip 64 to 32 SelectedIdx silently with the SoftMax
+  // SelectedIdx in case dim_t is 32b.
   case Kinded::Kind::SoftMaxNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind({ElemKind::FloatTy},
                                                   {SoftMaxNode::SelectedIdx}) &&
-           (NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int64ITy);
+           (NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int32ITy ||
+            NI.getInElemTy(SoftMaxNode::SelectedIdx) == ElemKind::Int64ITy);
 
   case Kinded::Kind::ConvolutionGradNodeKind:
     return NI.allInputsAndOutputsHaveSameElemKind(
@@ -1925,7 +1937,7 @@ bool OCLBackend::isOpSupported(const NodeInfo &NI) const {
     return NI.allInputsAndOutputsHaveSameElemKind(
                {ElemKind::FloatTy}, {SoftMaxGradNode::SelectedIdx},
                {SoftMaxGradNode::GradOfInputNamedSelectedIdx}) &&
-           (NI.getInElemTy(SoftMaxGradNode::SelectedIdx) == ElemKind::Int64ITy);
+           (NI.getInElemTy(SoftMaxGradNode::SelectedIdx) == IndexElemKind);
 
   case Kinded::Kind::SaveNodeKind:
   case Kinded::Kind::ReshapeNodeKind:

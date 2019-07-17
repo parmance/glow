@@ -285,7 +285,7 @@ int main(int argc, char **argv) {
   parseCommandLine(argc, argv);
   Loader loader;
 
-  std::vector<std::size_t> dims;
+  std::vector<dim_t> dims;
   std::vector<char> inputData;
   std::vector<std::string> files;
   Tensor inputT;

@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
   BB.newInstr("TensorView")
       .addOperand("Src", OperandKind::In)
       .addMember(MemberType::TypeRef, "Ty")
-      .addMember(MemberType::VectorSizeT, "Offsets")
+      .addMember(MemberType::VectorDimT, "Offsets")
       .setType("Ty");
 
   BB.newInstr("DeallocActivation")
@@ -278,8 +278,7 @@ int main(int argc, char **argv) {
       .addOperand("Lengths", OperandKind::In)
       .autoIRGen()
       .autoVerify(VerifyKind::SameElementType, {"Dest", "Data"})
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"})
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"})
       .autoVerify(VerifyKind::SameElementType,
                   {"Lengths", "ElemKind::Int32ITy"});
 
@@ -291,8 +290,7 @@ int main(int argc, char **argv) {
       .addOperand("Lengths", OperandKind::In)
       .autoIRGen()
       .autoVerify(VerifyKind::SameElementType, {"Dest", "Data", "Weights"})
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"})
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"})
       .autoVerify(VerifyKind::SameElementType,
                   {"Lengths", "ElemKind::Int32ITy"})
       .autoVerify(VerifyKind::SameShape, {"Weights", "Indices"})
@@ -310,8 +308,7 @@ int main(int argc, char **argv) {
       .addMember(MemberType::Boolean, "UseFP16Accumulation")
       .autoIRGen()
       .autoVerify(VerifyKind::SameElementType, {"Data", "ElemKind::UInt8QTy"})
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"})
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"})
       .autoVerify(VerifyKind::SameElementType,
                   {"Lengths", "ElemKind::Int32ITy"})
       .autoVerify(VerifyKind::SameShape, {"Weights", "Indices"});
@@ -324,8 +321,7 @@ int main(int argc, char **argv) {
       .addOperand("Lengths", OperandKind::In)
       .addMember(MemberType::Boolean, "UseFP16Accumulation")
       .autoIRGen()
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"})
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"})
       .autoVerify(VerifyKind::SameElementType,
                   {"Lengths", "ElemKind::Int32ITy"})
       .autoVerify(VerifyKind::SameShape, {"Weights", "Indices"});
@@ -360,11 +356,10 @@ int main(int argc, char **argv) {
       .addOperand("Values", OperandKind::In)
       .addOperand("DefaultValue", OperandKind::In)
       .addOperand("Lengths", OperandKind::In)
-      .addMember(MemberType::VectorInt64, "Mask")
+      .addMember(MemberType::VectorDimT, "Mask")
       .autoVerify(VerifyKind::SameElementType,
                   {"Dest", "Values", "DefaultValue"})
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"})
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"})
       .autoVerify(VerifyKind::SameElementType,
                   {"Lengths", "ElemKind::Int32ITy"})
       .autoIRGen();
@@ -583,14 +578,14 @@ int main(int argc, char **argv) {
   BB.newInstr("InsertTensor")
       .addOperand("Dest", OperandKind::InOut)
       .addOperand("Src", OperandKind::In)
-      .addMember(MemberType::VectorSizeT, "Offsets")
+      .addMember(MemberType::VectorDimT, "Offsets")
       .addMember(MemberType::Unsigned, "Count")
       .addMember(MemberType::Unsigned, "Axis");
 
   BB.newInstr("ExtractTensor")
       .addOperand("Dest", OperandKind::Out)
       .addOperand("Src", OperandKind::In)
-      .addMember(MemberType::VectorSizeT, "Offsets");
+      .addMember(MemberType::VectorDimT, "Offsets");
 
   BB.newInstr("Gather")
       .addOperand("Dest", OperandKind::Out)
@@ -614,8 +609,7 @@ int main(int argc, char **argv) {
       .addOperand("Indices", OperandKind::In)
       .addOperand("Slices", OperandKind::In)
       .addMember(MemberType::Boolean, "Cumulative")
-      .autoVerify(VerifyKind::SameElementType,
-                  {"Indices", "ElemKind::Int64ITy"});
+      .autoVerify(VerifyKind::SameElementType, {"Indices", "IndexElemKind"});
 
   BB.newInstr("BatchOneHot")
       .addOperand("Dest", OperandKind::Out)

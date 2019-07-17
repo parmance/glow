@@ -247,12 +247,12 @@ protected:
   PrecisionConfiguration precConfig_;
 
   // Test Config:
-  size_t miniBatch;
-  size_t embeddingDim;
-  size_t denseDim;
-  std::vector<size_t> tableSizes;
-  std::vector<size_t> bottomMLPIntermediateDims;
-  std::vector<size_t> topMLPIntermediateDims;
+  dim_t miniBatch;
+  dim_t embeddingDim;
+  dim_t denseDim;
+  std::vector<dim_t> tableSizes;
+  std::vector<dim_t> bottomMLPIntermediateDims;
+  std::vector<dim_t> topMLPIntermediateDims;
   size_t lengthsMin;
   size_t lengthsMax;
 
@@ -280,20 +280,19 @@ protected:
   /// less than \p numLayers then it will wrap around and reuse
   /// \p providedIntermediateDims until \p numLayers are added to the returned
   /// vector.
-  static std::vector<size_t>
+  static std::vector<dim_t>
   getIntermediateDims(llvm::ArrayRef<unsigned> providedIntermediateDims,
-                      unsigned numLayers,
-                      size_t defaultIntermediateDim = 1024) {
-    std::vector<size_t> destIntermediateDims;
-    std::vector<size_t> dims(providedIntermediateDims.begin(),
-                             providedIntermediateDims.end());
+                      unsigned numLayers, dim_t defaultIntermediateDim = 1024) {
+    std::vector<dim_t> destIntermediateDims;
+    std::vector<dim_t> dims(providedIntermediateDims.begin(),
+                            providedIntermediateDims.end());
     if (dims.empty()) {
       dims.push_back(defaultIntermediateDim);
     }
     const size_t numProvidedDimsTop = dims.size();
     // Note: Add one extra intermediate dim, which is used by the output layer
     // of the MLP. The input layer is set based on its own input.
-    for (size_t i = 0, e = numLayers + 1; i < e; i++) {
+    for (dim_t i = 0, e = numLayers + 1; i < e; i++) {
       destIntermediateDims.push_back(dims[i % numProvidedDimsTop]);
     }
     return destIntermediateDims;
@@ -320,7 +319,7 @@ protected:
         }
       } else {
         tableSizes =
-            std::vector<size_t>(tableSizesOpt.begin(), tableSizesOpt.end());
+            std::vector<dim_t>(tableSizesOpt.begin(), tableSizesOpt.end());
       }
       // Stable randomization of the order of the tables.
       std::shuffle(tableSizes.begin(), tableSizes.end(), std::mt19937());
@@ -402,11 +401,11 @@ protected:
   ///   * Hidden layers have dimension of \p intDim * intDim.
   ///   * Output layer has output dimension \p outputDim.
   static NodeValue createMLP(Module &mod, Function *F_, Node *N_,
-                             size_t inputDim, llvm::ArrayRef<size_t> intDims,
-                             size_t outputDim, size_t intermediateLayers) {
+                             dim_t inputDim, llvm::ArrayRef<dim_t> intDims,
+                             dim_t outputDim, dim_t intermediateLayers) {
     assert(intermediateLayers > 0);
 
-    const size_t firstIntDim = intDims[0];
+    const dim_t firstIntDim = intDims[0];
 
     // Type object for the internal layers.
     // Note: dimension argument is a placeholder and will get filled out by each
@@ -429,7 +428,7 @@ protected:
       // The current intermediate dimension is based on the previous FC's
       // result's trailing dimension. Thus we set the current FC's trailing
       // weight dim equal to the next FC's intermediate dimension.
-      const size_t intDim = intDims[i + 1];
+      const dim_t intDim = intDims[i + 1];
       auto *intermediate_bias = createRandomizedConstant(
           mod, internalType, {intDim}, "intermediate_bias");
       auto *intermediate_weight = createRandomizedConstant(
@@ -471,16 +470,15 @@ protected:
   ///     Tensors internally
   ///   * Biases are Int32 quantized.
   static NodeValue createQuantizedMLP(Module &mod, Function *F_, NodeValue N_,
-                                      size_t inputDim,
-                                      llvm::ArrayRef<size_t> intDims,
-                                      size_t outputDim,
-                                      size_t intermediateLayers) {
+                                      dim_t inputDim,
+                                      llvm::ArrayRef<dim_t> intDims,
+                                      dim_t outputDim,
+                                      dim_t intermediateLayers) {
     // Must have intermediate layers.
     assert(intermediateLayers > 0);
 
-    const size_t firstIntDim = intDims[0];
-
-    const size_t minibatchSize = N_.dims()[0];
+    const dim_t minibatchSize = N_.dims()[0];
+    const dim_t firstIntDim = intDims[0];
 
     // Type objects for the internal types.
     // Note: dimension argument is a placeholder and will get filled out by each
@@ -515,7 +513,7 @@ protected:
       // The current intermediate dimension is based on the previous FC's
       // result's trailing dimension. Thus we set the current FC's trailing
       // weight dim equal to the next FC's intermediate dimension.
-      const size_t intDim = intDims[i + 1];
+      const dim_t intDim = intDims[i + 1];
       auto *intermediate_bias = createRandomizedConstant(
           mod, internalBiasType, {intDim}, "intermediate_bias");
       auto *intermediate_weight = createRandomizedConstant(
@@ -553,7 +551,7 @@ protected:
   void createSparseEmbeddings(Module &mod, PlaceholderBindings &bindings_,
                               Function *F_,
                               llvm::ArrayRef<Placeholder *> lengths,
-                              llvm::ArrayRef<size_t> embSizes, size_t embDim,
+                              llvm::ArrayRef<dim_t> embSizes, dim_t embDim,
                               std::vector<NodeValue> &embeddings) {
     auto internalTypeF = mod.uniqueType(ElemKind::FloatTy, {1});
 
@@ -565,7 +563,7 @@ protected:
           bindings_.allocate(lengths[i])->getHandle<int32_t>(), 2011,
           lengthsMin, lengthsMax);
 
-      size_t sum =
+      dim_t sum =
           sumOfElements(bindings_.get(lengths[i])->getHandle<int32_t>());
       auto *indices = mod.createPlaceholder(
           ElemKind::Int64ITy, {sum}, "indices" + std::to_string(i), false);
@@ -602,8 +600,8 @@ protected:
   /// the SpareLengthsSum Node tying it together.
   void createSparseWeightedGatherEmbeddings(
       Module &mod, PlaceholderBindings &bindings_, Function *F_,
-      llvm::ArrayRef<Placeholder *> lengths, llvm::ArrayRef<size_t> tableSizes,
-      size_t embeddingDim, std::vector<NodeValue> &embeddings,
+      llvm::ArrayRef<Placeholder *> lengths, llvm::ArrayRef<dim_t> tableSizes,
+      dim_t embeddingDim, std::vector<NodeValue> &embeddings,
       uint32_t weightsSize = 1000) {
     const ElemKind precisionForSLWS =
         useFP16SLWS ? ElemKind::Float16Ty : ElemKind::FloatTy;
@@ -613,7 +611,7 @@ protected:
           bindings_.allocate(lengths[i])->getHandle<int32_t>(), 2011,
           lengthsMin, lengthsMax);
 
-      size_t sum =
+      dim_t sum =
           sumOfElements(bindings_.get(lengths[i])->getHandle<int32_t>());
       auto *indices = mod.createPlaceholder(
           ElemKind::Int64ITy, {sum}, "indices" + std::to_string(i), false);
@@ -664,7 +662,7 @@ protected:
 
   /// Builds a simple graph, \returns the Tensor output of the graph.
   Tensor *createSimpleRecSysGraph(Module &mod, PlaceholderBindings &bindings,
-                                  Function *F, llvm::ArrayRef<size_t> embSizes,
+                                  Function *F, llvm::ArrayRef<dim_t> embSizes,
                                   size_t embDim) {
     EXPECT_EQ(tableSizes.size(), embSizes.size());
 
@@ -709,17 +707,18 @@ protected:
               << std::endl;
     auto *CN = F->createConcat("concat", embeddings,
                                1); // Output is size {MB, embDim*n}
-    auto *reshaped = F->createReshape(
-        "reshape", CN,
-        {bottomMLP.dims()[0], embeddings.size(), embDim}); // {MB, n, embDim}
+    auto *reshaped =
+        F->createReshape("reshape", CN,
+                         {bottomMLP.dims()[0], (dim_t)embeddings.size(),
+                          embDim}); // {MB, n, embDim}
     auto *transposed =
         F->createTranspose("transpose", reshaped, {0, 2, 1}); // {MB, embDim, n}
     auto *dot = F->createBatchMatMul("dot_products", reshaped,
                                      transposed); // {MB, n, n}
-    auto *reshapeDot =
-        F->createReshape("reshapeDot", dot,
-                         {bottomMLP.dims()[0],
-                          embeddings.size() * embeddings.size()}); // {MB, n^2}
+    auto *reshapeDot = F->createReshape(
+        "reshapeDot", dot,
+        {bottomMLP.dims()[0],
+         (dim_t)embeddings.size() * embeddings.size()}); // {MB, n^2}
     NodeValue interact = F->createConcat("interact", {reshapeDot, bottomMLP},
                                          1); // {MB, n^2 + embDim}
 

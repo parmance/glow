@@ -115,11 +115,11 @@ void loadImagesAndLabels(Tensor &images, Tensor &labels) {
   /// Simple scaling would be one CIFAR image copied to the center area with
   /// offset 96 pixels
   constexpr unsigned imageOffset = 96;
-  for (unsigned n = 0; n < CIFAR_NUM_IMAGES; ++n) {
-    labelsH.at({n, static_cast<unsigned long>(dbInput.get())}) = 1;
+  for (dim_t n = 0; n < CIFAR_NUM_IMAGES; ++n) {
+    labelsH.at({n, static_cast<dim_t>(dbInput.get())}) = 1;
     // ResNet50 model got trained in NCHW format.
     for (unsigned c = 0; c < IMAGE_COLORS; ++c) {
-      auto bgrc = IMAGE_COLORS - 1 - c;
+      dim_t bgrc = IMAGE_COLORS - 1 - c;
       for (unsigned h = 0; h < 32; ++h) {
         for (unsigned w = 0; w < 32; ++w) {
           // ResNet BGR color space vs CIFAR RGB.
@@ -139,11 +139,11 @@ int main(int argc, char **argv) {
                                     " ResNet50 Training Example\n\n");
 
   // We expect the input to be NCHW.
-  llvm::ArrayRef<size_t> allImagesDims = {CIFAR_NUM_IMAGES, IMAGE_COLORS,
-                                          IMAGE_HEIGHT, IMAGE_WIDTH};
-  llvm::ArrayRef<size_t> initImagesDims = {1, IMAGE_COLORS, IMAGE_HEIGHT,
-                                           IMAGE_WIDTH};
-  llvm::ArrayRef<size_t> allLabelsDims = {CIFAR_NUM_IMAGES, 1000};
+  llvm::ArrayRef<dim_t> allImagesDims = {CIFAR_NUM_IMAGES, IMAGE_COLORS,
+                                         IMAGE_HEIGHT, IMAGE_WIDTH};
+  llvm::ArrayRef<dim_t> initImagesDims = {1, IMAGE_COLORS, IMAGE_HEIGHT,
+                                          IMAGE_WIDTH};
+  llvm::ArrayRef<dim_t> allLabelsDims = {CIFAR_NUM_IMAGES, 1000};
 
   ExecutionEngine EE(executionBackend);
   auto &mod = EE.getModule();
@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
   // These tensors allocate memory for all images and labels prepared for
   // training.
   Tensor images(ElemKind::FloatTy, allImagesDims);
-  Tensor labels(ElemKind::Int64ITy, allLabelsDims);
+  Tensor labels(IndexElemKind, allLabelsDims);
 
   loadImagesAndLabels(images, labels);
 
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
       EE.run(bindings, tfName);
       timer.stopTimer();
 
-      auto correct = findMaxIndex(labels.getHandle<int64_t>(), 10);
+      auto correct = findMaxIndex(labels.getHandle<sdim_t>(), 10);
       auto guess = findMaxIndex(result->getHandle(), 10);
       score += guess == correct;
       ++total;

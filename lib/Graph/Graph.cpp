@@ -70,9 +70,8 @@ void logStorageCreation(std::list<Function *> functions, Storage *s) {
 
 /// Merge shape \p shape into \p mergeShape, following multidirectional
 /// broadcasting rules.
-static void
-mergeMultidirectionalBroadcastHelper(std::vector<size_t> &mergeShape,
-                                     llvm::ArrayRef<size_t> shape) {
+static void mergeMultidirectionalBroadcastHelper(std::vector<dim_t> &mergeShape,
+                                                 llvm::ArrayRef<dim_t> shape) {
   size_t shift = mergeShape.size() - shape.size();
   for (size_t i = 0, e = shape.size(); i < e; i++) {
     if (shape[i] == 1) {
@@ -89,13 +88,13 @@ mergeMultidirectionalBroadcastHelper(std::vector<size_t> &mergeShape,
 
 /// Utility function which computes the resulting shape in case of
 /// multidirectional broadcasting.
-static std::vector<size_t>
-computeMultidirectionalBroadcastHelper(llvm::ArrayRef<size_t> shape0,
-                                       llvm::ArrayRef<size_t> shape1) {
+static std::vector<dim_t>
+computeMultidirectionalBroadcastHelper(llvm::ArrayRef<dim_t> shape0,
+                                       llvm::ArrayRef<dim_t> shape1) {
   size_t numDims0 = shape0.size();
   size_t numDims1 = shape1.size();
   size_t newNumDims = std::max(numDims0, numDims1);
-  std::vector<size_t> reshapeDims(newNumDims, 1);
+  std::vector<dim_t> reshapeDims(newNumDims, 1);
 
   mergeMultidirectionalBroadcastHelper(reshapeDims, shape0);
   mergeMultidirectionalBroadcastHelper(reshapeDims, shape1);
@@ -105,7 +104,7 @@ computeMultidirectionalBroadcastHelper(llvm::ArrayRef<size_t> shape0,
 
 std::vector<NodeValue>
 Function::broadcastInputs(int axis, const llvm::ArrayRef<NodeValue> inputs) {
-  size_t numInputs = inputs.size();
+  dim_t numInputs = inputs.size();
 
   if (axis > -1) {
     assert(
@@ -119,7 +118,7 @@ Function::broadcastInputs(int axis, const llvm::ArrayRef<NodeValue> inputs) {
 
   assert(numInputs >= 2 && "Invalid input passed in to commonCreateBroadcast.");
 
-  std::vector<size_t> targetDim = computeMultidirectionalBroadcastHelper(
+  std::vector<dim_t> targetDim = computeMultidirectionalBroadcastHelper(
       inputs[0].dims(), inputs[1].dims());
 
   for (size_t i = 2; i < numInputs; ++i) {
@@ -131,7 +130,7 @@ Function::broadcastInputs(int axis, const llvm::ArrayRef<NodeValue> inputs) {
   for (size_t i = 0; i < numInputs; ++i) {
     NodeValue n = inputs[i];
     auto dims = n.dims();
-    if (dims != llvm::ArrayRef<size_t>(targetDim)) {
+    if (dims != llvm::ArrayRef<dim_t>(targetDim)) {
       unsigned axis = targetDim.size() - dims.size();
       out[i] = createBroadcast("broadcast_" + n.getNode()->getName().str(), n,
                                targetDim, axis);
@@ -440,21 +439,21 @@ Function::~Function() {
   logCtx_->dumpLog(getName());
 }
 
-TypeRef Module::uniqueType(ElemKind elemTy, llvm::ArrayRef<size_t> dims) {
+TypeRef Module::uniqueType(ElemKind elemTy, llvm::ArrayRef<dim_t> dims) {
   return uniqueType(Type(elemTy, dims));
 }
 
-TypeRef Module::uniqueType(ElemKind elemTy, llvm::ArrayRef<size_t> dims,
+TypeRef Module::uniqueType(ElemKind elemTy, llvm::ArrayRef<dim_t> dims,
                            float scale, int32_t offset) {
   return uniqueType(Type(elemTy, dims, scale, offset));
 }
 
-TypeRef Module::uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<size_t> dims) {
+TypeRef Module::uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<dim_t> dims) {
   return uniqueType(Type::newShape(*T, dims));
 }
 
-TypeRef Module::uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<size_t> dims,
-                                       llvm::ArrayRef<size_t> alignments) {
+TypeRef Module::uniqueTypeWithNewShape(TypeRef T, llvm::ArrayRef<dim_t> dims,
+                                       llvm::ArrayRef<dim_t> alignments) {
   return uniqueType(Type::newShape(*T, dims, alignments));
 }
 
@@ -472,7 +471,7 @@ TypeRef Module::getVoidTy() { return uniqueType(Type()); }
 
 /// \returns a ShapeVector of rank axes.size() less than the input \p dims,
 /// where the provided \p axes dimensions are removed from the shape.
-static ShapeVector getNewShapeWithoutAxes(llvm::ArrayRef<size_t> dims,
+static ShapeVector getNewShapeWithoutAxes(llvm::ArrayRef<dim_t> dims,
                                           llvm::ArrayRef<unsigned_t> axes) {
   assert(axes.size() <= dims.size() &&
          "Cannot remove more dimensions than exist.");
@@ -504,13 +503,13 @@ Placeholder *Module::createPlaceholder(TypeRef T, llvm::StringRef name,
   return ph;
 }
 
-Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<size_t> dims,
+Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                        llvm::StringRef name, bool isTrainable) {
   auto FT = uniqueType(T, dims);
   return createPlaceholder(FT, name, isTrainable);
 }
 
-Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<size_t> dims,
+Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                        float scale, int32_t offset,
                                        llvm::StringRef name, bool isTrainable) {
   auto FT = uniqueType(T, dims, scale, offset);
@@ -522,13 +521,13 @@ Constant *Module::createConstant(TypeRef T, llvm::StringRef name) {
   return addConstant(new Constant(name, FT));
 }
 
-Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<size_t> dims,
+Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                  llvm::StringRef name) {
   auto FT = uniqueType(T, dims);
   return createConstant(FT, name);
 }
 
-Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<size_t> dims,
+Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                  float scale, int32_t offset,
                                  llvm::StringRef name) {
   auto FT = uniqueType(T, dims, scale, offset);
@@ -735,7 +734,7 @@ MaxPoolNode *Function::createMaxPool(llvm::StringRef name, NodeValue input,
   auto OT = getParent()->uniqueTypeWithNewShape(
       input.getType(), {idim.n, outSz.first, outSz.second, idim.c});
   auto AMT = getParent()->uniqueType(
-      ElemKind::Int64ITy, {idim.n, outSz.first, outSz.second, idim.c});
+      IndexElemKind, {idim.n, outSz.first, outSz.second, idim.c});
 
   return addNode(
       new MaxPoolNode(name, OT, AMT, input, kernels, strides, pads, layout));
@@ -833,9 +832,9 @@ Function::createRowwiseQuantizedFullyConnected(llvm::StringRef name,
   // The quantized data is in qWeights, the scale of each row is in scales,
   // and the offset of each row is in offsets.
   Constant *weights = llvm::cast<Constant>(W);
-  size_t numRows =
+  dim_t numRows =
       transposeWeight ? W->getType()->dims()[1] : W->getType()->dims()[0];
-  size_t numCols =
+  dim_t numCols =
       transposeWeight ? W->getType()->dims()[0] : W->getType()->dims()[1];
 
   // So far, if we want to create a storage with Int8QTy/Int16QTy,
@@ -934,14 +933,14 @@ Function::createSigmoidCrossEntropyWithLogits(llvm::StringRef name,
                                               NodeValue logits,
                                               NodeValue targets) {
   assert(logits.dims().size() > 1);
-  std::vector<size_t> outDims(logits.dims().begin(), logits.dims().end() - 1);
+  std::vector<dim_t> outDims(logits.dims().begin(), logits.dims().end() - 1);
   auto ty = getParent()->uniqueTypeWithNewShape(logits.getType(), outDims);
   return addNode(
       new SigmoidCrossEntropyWithLogitsNode(name, ty, logits, targets));
 }
 
 ReshapeNode *Function::createReshape(llvm::StringRef name, NodeValue input,
-                                     llvm::ArrayRef<size_t> shape) {
+                                     llvm::ArrayRef<dim_t> shape) {
   auto TR = getParent()->uniqueTypeWithNewShape(input.getType(), shape);
   DCHECK_EQ(TR->size(), input.getType()->size())
       << "Reshape to a different size";
@@ -961,8 +960,7 @@ TransposeNode *Function::createTranspose(llvm::StringRef name, NodeValue input,
 }
 
 Node *Function::createBroadcast(llvm::StringRef name, NodeValue input,
-                                llvm::ArrayRef<size_t> newShape,
-                                unsigned_t axis) {
+                                UnsignedArrayRef newShape, unsigned_t axis) {
   const auto &origDims = input.dims();
 
   assert(axis + origDims.size() <= newShape.size() &&
@@ -973,8 +971,8 @@ Node *Function::createBroadcast(llvm::StringRef name, NodeValue input,
   // new shape (no action taken) or == 1 (broadcast in that direction). Else
   // the original shape had no dimensions here (after considering axis), so
   // add the new dimension and broadcast in that direction.
-  size_t reshapeDims[max_tensor_dimensions];
-  for (size_t i = 0; i < newShape.size(); i++) {
+  dim_t reshapeDims[max_tensor_dimensions];
+  for (dim_t i = 0; i < newShape.size(); i++) {
     if (i >= axis && i < origDims.size() + axis) {
       const int origIdx = i - axis;
       if (origDims[origIdx] == newShape[i]) {
@@ -997,7 +995,7 @@ Node *Function::createBroadcast(llvm::StringRef name, NodeValue input,
   // with 1s in place of to-be-broadcasted dimensions.
   Node *currNode =
       createReshape(name.str() + ".reshape", input,
-                    llvm::ArrayRef<size_t>(reshapeDims, newShape.size()));
+                    llvm::ArrayRef<dim_t>(reshapeDims, newShape.size()));
 
   // Create a Tile (which is really a Concat) in each direction that needs to
   // be broadcasted.
@@ -1099,14 +1097,14 @@ TileNode *Function::createTile(llvm::StringRef name, NodeValue input,
 
 InsertTensorNode *Function::createInsertTensor(llvm::StringRef name,
                                                NodeValue big, NodeValue small,
-                                               llvm::ArrayRef<size_t> start,
+                                               llvm::ArrayRef<dim_t> start,
                                                unsigned_t count,
                                                unsigned_t axis) {
   return addNode(new InsertTensorNode(name, big, small, start, count, axis));
 }
 
 SliceNode *Function::createSlice(llvm::StringRef name, NodeValue input,
-                                 llvm::ArrayRef<size_t> start, TypeRef outTy) {
+                                 llvm::ArrayRef<dim_t> start, TypeRef outTy) {
   assert(input.dims().size() == start.size() &&
          "Start and input dims should match");
   assert(outTy->dims().size() == start.size() &&
@@ -1122,18 +1120,18 @@ SliceNode *Function::createSlice(llvm::StringRef name, NodeValue input,
 }
 
 SliceNode *Function::createSlice(llvm::StringRef name, NodeValue input,
-                                 llvm::ArrayRef<size_t> begin,
-                                 llvm::ArrayRef<size_t> end) {
+                                 llvm::ArrayRef<dim_t> begin,
+                                 llvm::ArrayRef<dim_t> end) {
 
-  std::vector<size_t> beginV, shape;
+  std::vector<dim_t> beginV, shape;
   auto dims = input.dims();
   assert(begin.size() == end.size() && "Begin and End dimensions should match");
   assert(begin.size() == dims.size() &&
          "Begin and Input dimensions should match");
   for (unsigned i = 0; i < dims.size(); i++) {
-    size_t beginI = begin[i];
-    size_t endI = end[i];
-    size_t dimI = dims[i];
+    dim_t beginI = begin[i];
+    dim_t endI = end[i];
+    dim_t dimI = dims[i];
     (void)dimI;
     assert(beginI >= 0 && "Illegal Begin indices");
     assert(endI > 0 && "Illegal End indices");
@@ -1155,7 +1153,7 @@ Node *Function::createChannelShuffle(llvm::StringRef name, NodeValue input,
 }
 
 ReshapeNode *Function::createSqueeze(llvm::StringRef name, NodeValue input,
-                                     llvm::ArrayRef<size_t> axes) {
+                                     llvm::ArrayRef<dim_t> axes) {
   assert(!axes.empty() && "Parameter `axes` must be provided.");
 
   ShapeVector shapeAxes(axes.begin(), axes.end());
@@ -1185,7 +1183,7 @@ ReshapeNode *Function::createSqueeze(llvm::StringRef name, NodeValue input,
 }
 
 ReshapeNode *Function::createExpandDims(llvm::StringRef name, NodeValue input,
-                                        llvm::ArrayRef<size_t> axes) {
+                                        llvm::ArrayRef<dim_t> axes) {
   assert(!axes.empty() && "Parameter `axes` must be provided.");
 
   // Dimensions provided in axes are for the output tensor, so we sort them
@@ -1231,7 +1229,7 @@ ReshapeNode *Function::createFlatten(llvm::StringRef name, NodeValue input,
 
 void Function::createSplit(llvm::StringRef name, NodeValue input,
                            unsigned_t outputNum, unsigned_t axis,
-                           llvm::ArrayRef<size_t> split,
+                           llvm::ArrayRef<dim_t> split,
                            std::vector<SliceNode *> &outputs) {
   auto inDims = input.dims();
   if (split.empty()) {
@@ -1444,11 +1442,11 @@ BatchMatMulNode *Function::createBatchMatMul(llvm::StringRef name,
   // LHS = {numBatches, N, M}
   // RHS = {numBatches, M, P}
   // Result = {numBatches, N, P}
-  const size_t numBatches = LHS.dims()[0];
-  const size_t N = LHS.dims()[1];
-  const size_t M = LHS.dims()[2];
+  const dim_t numBatches = LHS.dims()[0];
+  const dim_t N = LHS.dims()[1];
+  const dim_t M = LHS.dims()[2];
   (void)M;
-  const size_t P = RHS.dims()[2];
+  const dim_t P = RHS.dims()[2];
   assert((RHS.dims()[0] == numBatches) && "Batch sizes are invalid.");
   assert((RHS.dims()[1] == M) && "Batch matmul dimensions are invalid.");
 
@@ -1656,8 +1654,8 @@ Function::createRowwiseQuantizedSparseLengthsSum(
 /// Function \p F is used to get the speficific type, using inputs \p inDims and
 /// \p lenghtsDims to compute output dimensions.
 static TypeRef getOutputTypeOfFusedRowwiseQuantizedSLS(
-    Function *F, const llvm::ArrayRef<size_t> &inDims,
-    const llvm::ArrayRef<size_t> &lengthsDims, ElemKind scaleOffsetKind) {
+    Function *F, const llvm::ArrayRef<dim_t> &inDims,
+    const llvm::ArrayRef<dim_t> &lengthsDims, ElemKind scaleOffsetKind) {
   ShapeVector outDims(inDims.begin(), inDims.end());
   outDims[0] = lengthsDims[0];
   // The output column count is the same as the input column count, but without
@@ -1709,7 +1707,7 @@ static Constant *quantizeDataForFusedRowwiseQuantizedSparseLengthsWeightedSum(
   case ElemKind::FloatTy: {
     Constant *rwqData = F->getParent()->createConstant(
         ElemKind::UInt8FusedQTy,
-        {fDims.first, fDims.second + 2 * sizeof(float)}, 0.0, 0, "data");
+        {fDims.first, fDims.second + 2 * (dim_t)sizeof(float)}, 0.0, 0, "data");
     quantization::tensorFusedRowwiseQuantization<float>(
         fData, rwqData->getPayloadMutable());
     return rwqData;
@@ -1717,7 +1715,8 @@ static Constant *quantizeDataForFusedRowwiseQuantizedSparseLengthsWeightedSum(
   case ElemKind::Float16Ty: {
     Constant *rwqData = F->getParent()->createConstant(
         ElemKind::UInt8FusedFP16QTy,
-        {fDims.first, fDims.second + 2 * sizeof(float16_t)}, 0.0, 0, "data");
+        {fDims.first, fDims.second + 2 * (dim_t)sizeof(float16_t)}, 0.0, 0,
+        "data");
     quantization::tensorFusedRowwiseQuantization<float16_t>(
         fData, rwqData->getPayloadMutable());
     return rwqData;
@@ -1778,10 +1777,10 @@ SparseToDenseNode *Function::createSparseToDense(llvm::StringRef name,
 
 SparseToDenseMaskNode *Function::createSparseToDenseMask(
     llvm::StringRef name, NodeValue indices, NodeValue values,
-    NodeValue defaultValue, NodeValue lengths, llvm::ArrayRef<int64_t> mask) {
+    NodeValue defaultValue, NodeValue lengths, llvm::ArrayRef<dim_t> mask) {
   auto lengthsDims = lengths.dims();
   auto valueDims = defaultValue.dims();
-  ShapeVector outDims = {mask.size()};
+  ShapeVector outDims = {(dim_t)mask.size()};
   // If lengths is 0-dimensional tensor, then there is no batch dimension.
   if (lengthsDims.size() > 0) {
     outDims.insert(outDims.begin(), lengthsDims[0]);
@@ -1832,7 +1831,7 @@ Function::createIntLookupTable(llvm::StringRef name, NodeValue input,
                                llvm::ArrayRef<int8_t> initValues,
                                TypeRef outTy) {
   auto *mapping = getParent()->createConstant(
-      ElemKind::Int8QTy, {initValues.size()}, outTy->getScale(),
+      ElemKind::Int8QTy, {(dim_t)initValues.size()}, outTy->getScale(),
       outTy->getOffset(), "mapping");
   mapping->getHandle<int8_t>() = initValues;
 
@@ -1906,8 +1905,7 @@ TopKNode *Function::createTopK(llvm::StringRef name, NodeValue input,
   outDims.back() = k;
   auto OT = getParent()->uniqueTypeWithNewShape(input.getType(), outDims);
   return addNode(new TopKNode(
-      name, OT, getParent()->uniqueType(ElemKind::Int64ITy, outDims), input,
-      k));
+      name, OT, getParent()->uniqueType(IndexElemKind, outDims), input, k));
 }
 
 ArgMaxNode *Function::createArgMax(llvm::StringRef name, NodeValue input,
@@ -1921,7 +1919,7 @@ ArgMaxNode *Function::createArgMax(llvm::StringRef name, NodeValue input,
       newDims.push_back(i == axis ? 1 : inDims[i]);
     }
   }
-  auto TR = getParent()->uniqueType(ElemKind::Int64ITy, newDims);
+  auto TR = getParent()->uniqueType(IndexElemKind, newDims);
   return addNode(new ArgMaxNode(name, TR, input, axis, keepDims));
 }
 
@@ -1977,9 +1975,9 @@ SpaceToDepthNode *Function::createSpaceToDepth(llvm::StringRef name,
   assert(inputDim.size() == 4 && "Dimension size of 4 is expected.");
   assert((inputDim[1] % blockSize == 0 && inputDim[2] % blockSize == 0) &&
          "Height and Width needs to be multiple of blockSize.");
-  std::vector<size_t> newDim = {inputDim[0], inputDim[1] / blockSize,
-                                inputDim[2] / blockSize,
-                                inputDim[3] * blockSize * blockSize};
+  std::vector<dim_t> newDim = {inputDim[0], inputDim[1] / blockSize,
+                               inputDim[2] / blockSize,
+                               inputDim[3] * blockSize * blockSize};
   auto outTy = getParent()->uniqueTypeWithNewShape(input.getType(), newDim);
   return addNode(new SpaceToDepthNode(name, outTy, input, blockSize));
 }
@@ -1996,13 +1994,13 @@ ResizeNearestNode *Function::createResizeNearest(llvm::StringRef name,
                               << ", Scale larger than 0 is expected.";
   DCHECK_GT(widthScale, 0.0)
       << "Width scale: " << widthScale << ", Scale larger than 0 is expected.";
-  auto newH = size_t(std::floor(inputDim[1] * heightScale));
+  dim_t newH = std::floor(inputDim[1] * heightScale);
   DCHECK_GT(newH, 0) << "Scaled height is " << newH
                      << ", Scaled value needs to be larger than 0.";
-  auto newW = size_t(std::floor(inputDim[2] * widthScale));
+  dim_t newW = std::floor(inputDim[2] * widthScale);
   DCHECK_GT(newW, 0) << "Scaled width is " << newW
                      << ", Scaled value needs to be larger than 0.";
-  std::vector<size_t> newDim = {inputDim[0], newH, newW, inputDim[3]};
+  std::vector<dim_t> newDim = {inputDim[0], newH, newW, inputDim[3]};
   auto outTy = getParent()->uniqueTypeWithNewShape(input.getType(), newDim);
   return addNode(
       new ResizeNearestNode(name, outTy, input, heightScale, widthScale));
@@ -2115,7 +2113,7 @@ BatchNormalizationNode *Function::createBatchNormalization(
     PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
     unsigned_t channelIdx, float epsilon, float momentum) {
   // Figure out how many channels are in the tensor.
-  size_t channels = input.dims()[channelIdx];
+  dim_t channels = input.dims()[channelIdx];
 
   ElemKind inputTy = input.getType()->getElementType();
 
@@ -2143,7 +2141,7 @@ BatchNormalizationNode *Function::createBatchNormalization(
 
 ConvolutionNode *Function::createConv(
     PlaceholderBindings &bindings, llvm::StringRef name, NodeValue input,
-    size_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
+    dim_t outChannels, llvm::ArrayRef<unsigned_t> kernels,
     llvm::ArrayRef<unsigned_t> strides, llvm::ArrayRef<unsigned_t> pads,
     unsigned_t group, unsigned_t dilation, ConvolutionLayout layout) {
   ShapeNHWC idim = ShapeNHWC(input.dims());
@@ -2162,11 +2160,11 @@ ConvolutionNode *Function::createConv(
   auto outSz = calculateConvPoolOutputDims(idim.h, idim.w, kernels, strides,
                                            pads, dilation);
 
-  std::array<size_t, 4> outDims = {
+  std::array<dim_t, 4> outDims = {
       {idim.n, outSz.first, outSz.second, outChannels}};
 
   // Allocate the Filter and Bias tensors.
-  std::array<size_t, 4> filterDim = {
+  std::array<dim_t, 4> filterDim = {
       {outChannels, kdim.height, kdim.width, idim.c / group}};
   size_t fanIn = kdim.height * kdim.width * idim.c;
   ElemKind inputTy = input.getType()->getElementType();
@@ -2191,7 +2189,7 @@ ConvolutionNode *Function::createConv(
 
 ConvolutionNode *Function::createConv(PlaceholderBindings &bindings,
                                       llvm::StringRef name, NodeValue input,
-                                      size_t outChannels, unsigned_t kernel,
+                                      dim_t outChannels, unsigned_t kernel,
                                       unsigned_t stride, unsigned_t pad,
                                       unsigned_t group, unsigned_t dilation,
                                       ConvolutionLayout layout) {
@@ -2204,7 +2202,7 @@ ConvolutionNode *Function::createConv(PlaceholderBindings &bindings,
 
 Convolution3DNode *Function::createConv3D(PlaceholderBindings &bindings,
                                           llvm::StringRef name, NodeValue input,
-                                          size_t outChannels,
+                                          dim_t outChannels,
                                           llvm::ArrayRef<unsigned_t> kernels,
                                           llvm::ArrayRef<unsigned_t> strides,
                                           llvm::ArrayRef<unsigned_t> pads,
@@ -2220,14 +2218,14 @@ Convolution3DNode *Function::createConv3D(PlaceholderBindings &bindings,
   auto outSz = calculate3DConvPoolOutputDims(idim.h, idim.w, idim.d, kernels,
                                              strides, pads);
 
-  std::array<size_t, 5> outDims = {
+  std::array<dim_t, 5> outDims = {
       {idim.n, outSz.height, outSz.width, outSz.depth, outChannels}};
 
   // Allocate the Filter and Bias tensors.
-  std::array<size_t, 5> filterDim = {
+  std::array<dim_t, 5> filterDim = {
       {outChannels, kdim.height, kdim.width, kdim.depth, idim.c / group}};
 
-  size_t fanIn = kdim.height * kdim.width * kdim.depth * idim.c;
+  dim_t fanIn = kdim.height * kdim.width * kdim.depth * idim.c;
   ElemKind inputTy = input.getType()->getElementType();
   assert((inputTy == ElemKind::FloatTy || inputTy == ElemKind::Float16Ty) &&
          "Convolution3D on non-floating point type?");
@@ -2287,7 +2285,7 @@ ConvertToNode *Function::createConvertTo(llvm::StringRef name, NodeValue input,
 FullyConnectedNode *
 Function::createFullyConnected(PlaceholderBindings &bindings,
                                llvm::StringRef name, NodeValue input,
-                               size_t outDepth, unsigned_t axis) {
+                               dim_t outDepth, unsigned_t axis) {
   const ElemKind k = input.getType()->getElementType();
 
   // FC always uses 2D input; flatten if necessary.

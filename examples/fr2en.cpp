@@ -171,7 +171,7 @@ private:
   Placeholder *embedding_fr_, *embedding_en_;
   Node *encoderHiddenOutput_;
 
-  Placeholder *loadEmbedding(llvm::StringRef langPrefix, size_t langSize) {
+  Placeholder *loadEmbedding(llvm::StringRef langPrefix, dim_t langSize) {
     auto &mod = EE_.getModule();
     auto *result =
         mod.createPlaceholder(ElemKind::FloatTy, {langSize, EMBEDDING_SIZE},
@@ -293,7 +293,7 @@ void Model::loadDecoder() {
   auto *input = mod.createPlaceholder(ElemKind::Int64ITy, {batchSize_},
                                       "decoder.input", false);
   auto *inputTensor = bindings.allocate(input);
-  for (size_t i = 0; i < batchSize_; i++) {
+  for (dim_t i = 0; i < batchSize_; i++) {
     inputTensor->getHandle<int64_t>().at({i}) = en_.word2index_["SOS"];
   }
 
@@ -305,11 +305,12 @@ void Model::loadDecoder() {
       ElemKind::FloatTy, {EMBEDDING_SIZE, HIDDEN_SIZE}, "decoder.w_hh", false);
   auto *bHh = mod.createPlaceholder(ElemKind::FloatTy, {HIDDEN_SIZE},
                                     "decoder.b_hh", false);
-  auto *outW = mod.createPlaceholder(ElemKind::FloatTy,
-                                     {EMBEDDING_SIZE, en_.index2word_.size()},
-                                     "decoder.out_w", false);
-  auto *outB = mod.createPlaceholder(
-      ElemKind::FloatTy, {en_.index2word_.size()}, "decoder.out_b", false);
+  auto *outW = mod.createPlaceholder(
+      ElemKind::FloatTy, {EMBEDDING_SIZE, (dim_t)en_.index2word_.size()},
+      "decoder.out_w", false);
+  auto *outB =
+      mod.createPlaceholder(ElemKind::FloatTy, {(dim_t)en_.index2word_.size()},
+                            "decoder.out_b", false);
   loadMatrixFromFile("fr2en/decoder_w_ih.bin", *bindings.allocate(wIh));
   loadMatrixFromFile("fr2en/decoder_b_ih.bin", *bindings.allocate(bIh));
   loadMatrixFromFile("fr2en/decoder_w_hh.bin", *bindings.allocate(wHh));
@@ -357,7 +358,7 @@ void Model::translate(const std::vector<std::string> &batch) {
   Tensor seqLength(ElemKind::Int64ITy, {batchSize_});
   input.zero();
 
-  for (size_t j = 0; j < batch.size(); j++) {
+  for (dim_t j = 0; j < batch.size(); j++) {
     std::istringstream iss(batch[j]);
     std::vector<std::string> words;
     std::string word;
@@ -367,7 +368,7 @@ void Model::translate(const std::vector<std::string> &batch) {
 
     CHECK_LE(words.size(), MAX_LENGTH) << "sentence is too long.";
 
-    for (size_t i = 0; i < words.size(); i++) {
+    for (dim_t i = 0; i < words.size(); i++) {
       auto iter = fr_.word2index_.find(words[i]);
       CHECK(iter != fr_.word2index_.end()) << "Unknown word: " << words[i];
       input.getHandle<int64_t>().at({j, i}) = iter->second;
@@ -382,7 +383,7 @@ void Model::translate(const std::vector<std::string> &batch) {
   auto OH = bindings.get(output_)->getHandle<int64_t>();
   for (unsigned j = 0; j < batch.size(); j++) {
     for (unsigned i = 0; i < MAX_LENGTH; i++) {
-      int64_t wordIdx = OH.at({i, j});
+      size_t wordIdx = OH.at({i, j});
       if (wordIdx == en_.word2index_["EOS"])
         break;
 

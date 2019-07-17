@@ -165,7 +165,7 @@ void validateModel(ExecutionEngine &EE, PlaceholderBindings &bindings,
   int rightAnswer = 0;
   auto fname = F->getName();
 
-  for (int iter = numIterations; iter < numIterations + 10; iter++) {
+  for (dim_t iter = numIterations; iter < numIterations + 10; iter++) {
     bindings.get(inputPH)->copyConsecutiveSlices(&imageInputs,
                                                  minibatchSize * iter);
     EE.run(bindings, fname);

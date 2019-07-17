@@ -292,7 +292,7 @@ void tensorRowwiseQuantization(const Tensor &input, Tensor &output,
   auto destH = finalOut.getHandle<QP>();
   auto scalesH = scales.getHandle<ScaleT>();
   auto offsetsH = offsets.getHandle<OffsetT>();
-  for (size_t i = 0; i < idim.height; i++) {
+  for (dim_t i = 0; i < idim.height; i++) {
     auto slice = srcH.extractSlice(i);
     auto rSrc = slice.getHandle<float>();
     auto res = rSrc.minMaxArg();
@@ -306,7 +306,7 @@ void tensorRowwiseQuantization(const Tensor &input, Tensor &output,
     if (offsetIsInt32) {
       TensorQuantizationParams qParams =
           chooseQuantizationParams(min, max, schema);
-      for (size_t j = 0; j < idim.width; j++) {
+      for (dim_t j = 0; j < idim.width; j++) {
         destH.at({i, j}) = quantization::quantize(srcH.at({i, j}), qParams);
       }
       scalesH.raw(i) = qParams.scale;
@@ -316,7 +316,7 @@ void tensorRowwiseQuantization(const Tensor &input, Tensor &output,
       float scale = ((double)max - (double)min) / 255.0;
       float offset = min;
 
-      for (size_t j = 0; j < idim.width; j++) {
+      for (dim_t j = 0; j < idim.width; j++) {
         destH.at({i, j}) = quantization::quantizeWithFloatOffset<QP>(
             srcH.at({i, j}), scale, offset);
       }
@@ -378,7 +378,7 @@ void tensorFusedRowwiseQuantization(const Tensor &input, Tensor &output) {
 
   auto srcH = input.getHandle<float>();
   auto destH = output.getHandle<uint8_t>();
-  for (size_t i = 0, e = input.dims()[0]; i < e; i++) {
+  for (dim_t i = 0, e = input.dims()[0]; i < e; i++) {
     auto slice = srcH.extractSlice(i);
     auto rSrc = slice.getHandle<float>();
     auto res = rSrc.minMaxArg();
@@ -409,7 +409,7 @@ void tensorFusedRowwiseQuantization(const Tensor &input, Tensor &output) {
                             : ((double)max - (double)min) / range;
     const float offset = min;
 
-    for (size_t j = 0, f = input.dims()[1]; j < f; j++) {
+    for (dim_t j = 0, f = input.dims()[1]; j < f; j++) {
       if (outputType == ElemKind::UInt8FusedFP16QTy ||
           outputType == ElemKind::UInt8FusedQTy) {
         destH.at({i, j}) = quantization::quantizeWithFloatOffset<uint8_t>(

@@ -44,13 +44,13 @@ class GemmBench : public Benchmark {
   PlaceholderBindings bindings_;
   std::unique_ptr<runtime::HostManager> hostManager_;
   size_t asyncLaunchSize_;
-  size_t numCores_;
+  dim_t numCores_;
   const char *backendStr_;
   const char *dtypeStr_;
 
 public:
-  GemmBench(size_t m, size_t n, size_t k, size_t numLayers_,
-            size_t asyncLaunchSize_, size_t numCores_, const char *backendStr_,
+  GemmBench(dim_t m, dim_t n, dim_t k, dim_t numLayers_,
+            size_t asyncLaunchSize_, dim_t numCores_, const char *backendStr_,
             const char *dtypeStr_)
       : aDims{m, k}, cDims{m, n}, numLayers_(numLayers_),
         asyncLaunchSize_(asyncLaunchSize_), numCores_(numCores_),
@@ -63,9 +63,9 @@ public:
     configs.push_back(llvm::make_unique<runtime::DeviceConfig>(backendStr_));
     hostManager_ = llvm::make_unique<runtime::HostManager>(std::move(configs));
 
-    size_t m = cDims[0];
-    size_t n = cDims[1];
-    size_t k = aDims[1];
+    dim_t m = cDims[0];
+    dim_t n = cDims[1];
+    dim_t k = aDims[1];
     a.resize(m * k);
     b.resize(k * n);
     c.resize(m * n);
