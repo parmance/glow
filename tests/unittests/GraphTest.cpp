@@ -888,8 +888,7 @@ TEST(Graph, parentLink) {
   ExecutionEngine EE;
 
   auto &mod = EE.getModule();
-  Constant *V =
-      new Constant("V", mod.uniqueType(ElemKind::FloatTy, {3, 32}), ANY_LAYOUT);
+  Constant *V = new Constant("V", mod.uniqueType(ElemKind::FloatTy, {3, 32}));
 
   // Variables don't belong to any function...
   EXPECT_EQ(V->getParent(), nullptr);
@@ -1815,7 +1814,6 @@ TEST(Graph, testDumpStructure) {
   std::string mesN = K->toString();
   std::string expectMes = R"(Placeholder
 name : "input"
-layout : *
 output : float<4 x 320 x 200 x 100 x 3>
 users : 0
 trainable : 1
@@ -1868,7 +1866,6 @@ Indices : index32<10 x 3>
   std::string expectMesM = R"(Module structure:
 Constant
 name : "dummy"
-layout : *
 output : float<1 x 1>
 users : 0
 

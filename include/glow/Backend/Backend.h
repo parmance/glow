@@ -31,7 +31,6 @@ class Node;
 class PlaceholderBindings;
 class IRGenVisitor;
 class FunctionPassPipeline;
-class TensorLayoutCommon;
 
 /// Information about an entry point of a saved bundle.
 struct BundleEntry {
@@ -135,11 +134,6 @@ public:
   /// is not a strict requirement, of course, in case they diverge / the backend
   /// has a good reason not to call IRFunction::verify().
   virtual bool verify(const IRFunction &IR) const;
-
-  /// \returns a reference to the backend-specific tensor layout requirements
-  /// singleton. If not overridden, the default requirement is Glow's
-  /// "canonical" form.
-  virtual TensorLayoutCommon &getTensorLayoutRequirements() const;
 
   /// \returns true if the supplied Node \N should be lowered. By default, all
   /// Nodes are candidates for lowering.

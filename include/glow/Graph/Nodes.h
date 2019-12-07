@@ -36,8 +36,7 @@ public:
     OutputIdx = 0,
   };
 
-  Storage(Kinded::Kind k, llvm::StringRef name, const std::string &layout)
-      : Node(k, name), layout_(layout) {}
+  Storage(Kinded::Kind k, llvm::StringRef name) : Node(k, name) {}
 
   /// \return the single output value of the node.
   NodeValue getOutput() { return getNthResult(0); }
@@ -69,13 +68,6 @@ public:
     return k->getKind() == Kinded::Kind::ConstantKind ||
            k->getKind() == Kinded::Kind::PlaceholderKind;
   }
-
-  /// \return the layout of the storage.
-  const std::string &getLayout() const { return layout_; }
-
-private:
-  /// Specifies the Storage's layout
-  const std::string layout_;
 };
 
 class Constant : public Storage {
@@ -84,14 +76,14 @@ class Constant : public Storage {
 
 public:
   /// Create a new constant and initialize its payload.
-  Constant(llvm::StringRef name, TypeRef Ty, const std::string &layout)
-      : Storage(Kinded::Kind::ConstantKind, name, layout) {
+  Constant(llvm::StringRef name, TypeRef Ty)
+      : Storage(Kinded::Kind::ConstantKind, name) {
     addResult(Ty);
     payload_.reset(*Ty);
   }
 
-  Constant(llvm::StringRef name, Tensor &&payload, const std::string &layout)
-      : Storage(Kinded::Kind::ConstantKind, name, layout),
+  Constant(llvm::StringRef name, Tensor &&payload)
+      : Storage(Kinded::Kind::ConstantKind, name),
         payload_(std::move(payload)) {
     addResult(&payload_.getType());
   }
@@ -157,9 +149,8 @@ class Placeholder : public Storage {
 
 public:
   /// Create a new placeholder.
-  Placeholder(llvm::StringRef name, TypeRef Ty, bool isTrainable,
-              const std::string &layout)
-      : Storage(Kinded::Kind::PlaceholderKind, name, layout),
+  Placeholder(llvm::StringRef name, TypeRef Ty, bool isTrainable)
+      : Storage(Kinded::Kind::PlaceholderKind, name),
         isTrainable_(isTrainable) {
     addResult(Ty);
   }

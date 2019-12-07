@@ -38,7 +38,6 @@ add_library(OpenCLBackend
             OpenCL.cpp
             OpenCLDeviceManager.cpp
             OpenCLFactory.cpp
-            OpenCLTensorLayout.cpp
             Transforms.cpp)
 
 target_link_libraries(OpenCLBackend

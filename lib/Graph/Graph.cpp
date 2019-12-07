@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 #include "glow/Graph/Graph.h"
-#include "glow/Backend/Backend.h"
 #include "glow/Graph/Nodes.h"
 #include "glow/Graph/PlaceholderBindings.h"
-#include "glow/Graph/TensorLayout.h"
 #include "glow/Graph/VerifierHelper.h"
 #include "glow/Quantization/Base/Base.h"
 #include "glow/Support/Support.h"
@@ -498,10 +496,9 @@ static ShapeVector getNewShapeWithoutAxes(llvm::ArrayRef<dim_t> dims,
 //===----------------------------------------------------------------------===//
 
 Placeholder *Module::createPlaceholder(TypeRef T, llvm::StringRef name,
-                                       bool isTrainable,
-                                       const std::string &layout) {
+                                       bool isTrainable) {
   auto FT = uniqueType(*T);
-  auto *ph = new Placeholder(name, FT, isTrainable, layout);
+  auto *ph = new Placeholder(name, FT, isTrainable);
   ph->setName(uniqueName(ph->getName(), usedNodeNames_, usedStorageNames_));
   placeholders_.push_back(ph);
   logStorageCreation(functions_, ph);
@@ -509,51 +506,44 @@ Placeholder *Module::createPlaceholder(TypeRef T, llvm::StringRef name,
 }
 
 Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<dim_t> dims,
-                                       llvm::StringRef name, bool isTrainable,
-                                       const std::string &layout) {
+                                       llvm::StringRef name, bool isTrainable) {
   auto FT = uniqueType(T, dims);
-  return createPlaceholder(FT, name, isTrainable, layout);
+  return createPlaceholder(FT, name, isTrainable);
 }
 
 Placeholder *Module::createPlaceholder(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                        float scale, int32_t offset,
-                                       llvm::StringRef name, bool isTrainable,
-                                       const std::string &layout) {
+                                       llvm::StringRef name, bool isTrainable) {
   auto FT = uniqueType(T, dims, scale, offset);
-  return createPlaceholder(FT, name, isTrainable, layout);
+  return createPlaceholder(FT, name, isTrainable);
 }
 
-Constant *Module::createConstant(TypeRef T, llvm::StringRef name,
-                                 const std::string &layout) {
+Constant *Module::createConstant(TypeRef T, llvm::StringRef name) {
   auto FT = uniqueType(*T);
-  return addConstant(new Constant(name, FT, layout));
+  return addConstant(new Constant(name, FT));
 }
 
 Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<dim_t> dims,
-                                 llvm::StringRef name,
-                                 const std::string &layout) {
+                                 llvm::StringRef name) {
   auto FT = uniqueType(T, dims);
-  return createConstant(FT, name, layout);
+  return createConstant(FT, name);
 }
 
 Constant *Module::createConstant(ElemKind T, llvm::ArrayRef<dim_t> dims,
                                  float scale, int32_t offset,
-                                 llvm::StringRef name,
-                                 const std::string &layout) {
+                                 llvm::StringRef name) {
   auto FT = uniqueType(T, dims, scale, offset);
-  return createConstant(FT, name, layout);
+  return createConstant(FT, name);
 }
 
-Constant *Module::createConstant(llvm::StringRef name, const Tensor &tensor,
-                                 const std::string &layout) {
-  auto *V = createConstant(&tensor.getType(), name, layout);
+Constant *Module::createConstant(llvm::StringRef name, const Tensor &tensor) {
+  auto *V = createConstant(&tensor.getType(), name);
   V->assign(&tensor);
   return V;
 }
 
-Constant *Module::createConstant(llvm::StringRef name, Tensor &&tensor,
-                                 const std::string &layout) {
-  return addConstant(new Constant(name, std::move(tensor), layout));
+Constant *Module::createConstant(llvm::StringRef name, Tensor &&tensor) {
+  return addConstant(new Constant(name, std::move(tensor)));
 }
 
 std::string Module::getPrefix(llvm::StringRef name) {
@@ -1013,46 +1003,23 @@ Function::createSigmoidCrossEntropyWithLogits(llvm::StringRef name,
 }
 
 ReshapeNode *Function::createReshape(llvm::StringRef name, NodeValue input,
-                                     llvm::ArrayRef<dim_t> shape,
-                                     llvm::StringRef layout) {
+                                     llvm::ArrayRef<dim_t> shape) {
   auto TR = getParent()->uniqueTypeWithNewShape(input.getType(), shape);
   DCHECK_EQ(TR->size(), input.getType()->size())
       << "Reshape to a different size";
-  return addNode(new ReshapeNode(name, TR, input, shape.vec(), layout));
+  return addNode(new ReshapeNode(name, TR, input, shape.vec()));
 }
 
 TransposeNode *Function::createTranspose(llvm::StringRef name, NodeValue input,
-                                         llvm::ArrayRef<unsigned_t> shuffle,
-                                         const std::string &layout) {
+                                         llvm::ArrayRef<unsigned_t> shuffle) {
   ShapeVector shape;
   auto dims = input.dims();
   for (size_t i = 0; i < dims.size(); i++) {
     shape.push_back(dims[shuffle[i]]);
   }
 
-  // If the layout is known, check that it matches the shuffle:
-  auto compareShuffle = [&](const std::vector<unsigned_t> targetShuffle) {
-    auto shuffleVec = shuffle.vec();
-    return targetShuffle.size() == dims.size() &&
-           std::equal(shuffleVec.begin(), shuffleVec.end(),
-                      targetShuffle.begin());
-  };
-
-  auto currLayout = layout;
-  if (currLayout == ANY_LAYOUT) {
-    // If layout got a default value, change it based on shuffle:
-    // TODO: remove the shuffle and replace it with layout.
-    if (compareShuffle(NCHW2NHWC) || compareShuffle(HWCN2NHWC)) {
-      currLayout = "NHWC";
-    } else if (compareShuffle(NHWC2NCHW)) {
-      currLayout = "NCHW";
-    } else if (compareShuffle(NHWC2HWNC)) {
-      currLayout = "HWNC";
-    }
-  }
-
   auto NT = getParent()->uniqueTypeWithNewShape(input.getType(), shape);
-  return addNode(new TransposeNode(name, NT, input, shuffle.vec(), currLayout));
+  return addNode(new TransposeNode(name, NT, input, shuffle.vec()));
 }
 
 Node *Function::createBroadcast(llvm::StringRef name, NodeValue input,
@@ -3614,21 +3581,8 @@ insertAndReport(std::unordered_map<std::string, const Node *> &nameToNode,
   return true;
 }
 
-bool Function::verify(const Backend *backend) const {
+bool Function::verify() const {
   bool isValid = true;
-  if (backend) {
-    if (backend->getTensorLayoutRequirements().isEnabled()) {
-      isValid &= expectCompareTrue(
-          "Expected correct backend-specific layouts for the graph",
-          verifyLayouts(*this, backend->getTensorLayoutRequirements()), true,
-          this);
-    }
-  } else {
-    // Always run verification pre-lowering / when we don't have backend:
-    isValid &= expectCompareTrue(
-        "Expected correct Glow canonical layouts for the graph",
-        verifyLayouts(*this, CanonicalTensorLayout::getInstance()), true, this);
-  }
   std::unordered_map<std::string, const Node *> nameToNode;
 
   for (auto *V : getParent()->getConstants()) {

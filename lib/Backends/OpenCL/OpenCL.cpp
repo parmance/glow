@@ -22,7 +22,6 @@
 
 #include "OpenCL.h"
 #include "OpenCLDeviceManager.h"
-#include "OpenCLTensorLayout.h"
 
 #include "glow/Backend/BackendUtils.h"
 #include "glow/CodeGen/MemoryAllocator.h"
@@ -1703,7 +1702,7 @@ template <class T> static bool checkSquare(const T &I) {
 }
 
 bool OCLBackend::verify(const Function &F) const {
-  if (!F.verify(this)) {
+  if (!F.verify()) {
     return false;
   }
   if (!checkAllNodesSupported(F)) {
@@ -1860,10 +1859,6 @@ bool OCLBackend::verify(const IRFunction &IR) const {
 runtime::DeviceManager *
 OCLBackend::createDeviceManager(const runtime::DeviceConfig &deviceConfig) {
   return createOCLDeviceManager(deviceConfig);
-}
-
-TensorLayoutCommon &OCLBackend::getTensorLayoutRequirements() const {
-  return OpenCLTensorLayout::getInstance();
 }
 
 TraceInfo OCLBackend::buildManualTraceInfo(Function *F) const {

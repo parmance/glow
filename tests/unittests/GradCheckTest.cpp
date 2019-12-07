@@ -941,8 +941,7 @@ TEST_P(GradCheck, gradientCheckTranspose) {
     auto &mod = EE->getModule();
     bindings.clear();
     Function *F = mod.createFunction("main");
-    A = mod.createPlaceholder(ElemKind::FloatTy, {1, 5, 10, 5}, "input", false,
-                              "NHWC");
+    A = mod.createPlaceholder(ElemKind::FloatTy, {1, 5, 10, 5}, "input", false);
     Exp = mod.createPlaceholder(ElemKind::FloatTy, {1, numOutputElem}, "exp",
                                 false);
     Node *TA = F->createTranspose("transpose", A, NHWC2NCHW);
