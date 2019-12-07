@@ -396,6 +396,15 @@ void Partitioner::genBackendMap(
   }
 }
 
+const DeviceInfo &
+Partitioner::getDeviceInfoForBackend(llvm::StringRef backendName) {
+  for (DeviceInfo &devInfo : deviceInfo_) {
+    if (devInfo.backendName == backendName)
+      return devInfo;
+  }
+  assert(false);
+}
+
 Expected<DAGListTy> Partitioner::createDAGWithoutPartition(
     llvm::StringRef backendName, std::map<std::string, BackendInfo> &backendMap,
     CompilationContext &cctx) {
@@ -403,7 +412,8 @@ Expected<DAGListTy> Partitioner::createDAGWithoutPartition(
   for (auto F : module_->getFunctions()) {
     if (!optimized_) {
       auto backend = backendMap[backendName].backend;
-      RETURN_IF_ERR(::glow::optimizeFunction(F, *backend, cctx));
+      RETURN_IF_ERR(::glow::optimizeFunction(
+          F, *backend, cctx, &getDeviceInfoForBackend(backendName)));
     }
     std::unique_ptr<DAGNode> DAG0 = llvm::make_unique<DAGNode>();
     DAG0->logicalDevices = {0};
@@ -714,7 +724,9 @@ Partitioner::heterogeneousPartition(CompilationContext &cctx) {
     DCHECK(func->verify()) << "Conversion led to invalid function";
     // Step 2.1 : optimize a function if it has not been optimized yet.
     if (!optimized_) {
-      RETURN_IF_ERR(::glow::optimizeFunction(func, *backend, cctx));
+      RETURN_IF_ERR(::glow::optimizeFunction(
+          func, *backend, cctx,
+          &getDeviceInfoForBackend(backend->getBackendName())));
     }
 
     // Step 2.2 : apply graph partitioning algrithm to find out the partition.

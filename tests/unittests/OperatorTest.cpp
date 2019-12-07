@@ -7485,9 +7485,8 @@ TEST_P(
   Constant *weights = mod_.createConstant(ElemKind::FloatTy, {1}, "weights");
   weights->getPayloadMutable().getHandle<float>() = {1.};
 
-  Placeholder *indices =
-      mod_.createPlaceholder(IndexElemKind, {1}, "indices",
-                             /* isTrainable */ false);
+  Placeholder *indices = mod_.createPlaceholder(IndexElemKind, {1}, "indices",
+                                                /* isTrainable */ false);
   Placeholder *lengths =
       mod_.createPlaceholder(ElemKind::Int32ITy, {4}, "lengths",
                              /* isTrainable */ false);

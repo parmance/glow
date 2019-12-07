@@ -125,6 +125,10 @@ class Partitioner final : public PartitionerBase {
                      std::vector<std::unique_ptr<Backend>> &backendsHolder,
                      std::vector<Backend *> &backends);
 
+  /// Returns info for the default device of the backend. If multiple devices,
+  /// returns the first one.
+  const DeviceInfo& getDeviceInfoForBackend(llvm::StringRef backendName);
+
 public:
   /// \p parent is the module which contains the functions need to be divided.
   /// Here we assume that all the functions in one module belong to a same

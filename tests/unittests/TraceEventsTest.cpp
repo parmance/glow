@@ -91,7 +91,7 @@ public:
     return EE_.getModule().createPlaceholder(
         ElemKind::Int64ITy,
         {numEvents, backend->getTraceEventDataSize() /
-            Type::getElementSize(ElemKind::Int64ITy)},
+                        Type::getElementSize(ElemKind::Int64ITy)},
         "", false);
   }
 

@@ -30,6 +30,7 @@
 #include "glow/Optimizer/GraphOptimizerPipeline/Pipeline.h"
 #include "glow/Quantization/Base/Base.h"
 #include "glow/Quantization/Quantization.h"
+#include "glow/Runtime/RuntimeTypes.h"
 
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -3099,7 +3100,8 @@ Error glow::optimizeFunctionBeforeLowering(Function *F,
 // NOTE: When updating this function, please also update the documentation in
 // docs/GraphOptimizationPipeline.md
 Error glow::optimizeFunction(Function *F, const Backend &B,
-                             CompilationContext &cctx) {
+                             CompilationContext &cctx,
+                             const glow::runtime::DeviceInfo *devInfo) {
   LOG_SCOPE(F->getLogContext(), "glow::optimizeFunction")
 
   RETURN_IF_ERR(optimizeFunctionBeforeLowering(F, cctx));
@@ -3129,7 +3131,7 @@ Error glow::optimizeFunction(Function *F, const Backend &B,
   ::glow::optimize(F, cctx, B);
 
   // Allow the backend to transform the graph after lowering.
-  if (B.transformPostLowering(F, cctx)) {
+  if (B.transformPostLowering(F, cctx, devInfo)) {
     // Optimize the graph again after the backend transformation.
     // In particular, DCE is very likely to be useful.
     ::glow::optimize(F, cctx, B);
