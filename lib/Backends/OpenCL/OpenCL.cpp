@@ -74,6 +74,12 @@ static const unsigned char kernels_fwd_quantized_conv_cl_src[] = {
 static const size_t kernels_fwd_quantized_conv_cl_src_size =
     sizeof(kernels_fwd_quantized_conv_cl_src);
 
+// This defines kernels for most operations.
+static const unsigned char kernels_cl_src[] = {
+#include "glow/OpenCL/kernels.cl.inc"
+};
+static const size_t kernels_cl_src_size = sizeof(kernels_cl_src);
+
 static llvm::cl::OptionCategory OpenCLBackendCat("Glow OpenCL Backend Options");
 
 llvm::cl::opt<unsigned>
@@ -88,6 +94,11 @@ llvm::cl::opt<bool> clDoProfile("opencl-profile",
                                 llvm::cl::desc("Profile OpenCL kernels"),
                                 llvm::cl::init(false),
                                 llvm::cl::cat(OpenCLBackendCat));
+
+llvm::cl::opt<bool> clSpecializeConvolutionK(
+    "opencl-specialize-convolutionk",
+    llvm::cl::desc("Aggressively specialize convolutionK kernel launches."),
+    llvm::cl::init(false), llvm::cl::cat(OpenCLBackendCat));
 
 llvm::cl::opt<std::string> clDeviceProgramCacheDir(
     "opencl-program-cache-dir",
@@ -510,6 +521,7 @@ void OpenCLFunction::enqueueKernel(llvm::StringRef name,
 void OpenCLFunction::executeNCHWConvolution(
     const ConvolutionInst *CC, ExecutionContext *executionContext,
     runtime::OpenCLDeviceBindings *devBindings) {
+
   auto input = CC->getSrc();
   auto output = CC->getDest();
   auto bias = CC->getBias();
@@ -1139,14 +1151,54 @@ Error OpenCLFunction::execute(ExecutionContext *context) {
 
       // This is a naive implementation that parallelizes using three dims:
       // the X and the Y in the output filter.
-      cl_kernel kernel = createKernel(kernelName, program);
-      setKernelArg(kernel, 0, deviceBuffer);
-      auto numArgs = setKernelArgsForBuffers(kernel, I, 1, runtimeBundle_);
-      auto odim = ShapeNHWC(CC->getDest()->getType()->dims());
+
+      // Specialize the kernel related to parameters with very frequent
+      // values to enable constant propagation and other aggressive
+      // optimizations.
       auto idim = ShapeNHWC(CC->getSrc()->getType()->dims());
-      auto pads = PaddingTLBR(CC->getPads());
+
+      std::string src;
+      src.append(reinterpret_cast<const char *>(kernels_cl_src),
+                 kernels_cl_src_size);
+
       ShapeHW kdim(CC->getKernels());
       ShapeHW sdim(CC->getStrides());
+      auto odim = ShapeNHWC(CC->getDest()->getType()->dims());
+      ShapeNHWC kernelSize(CC->getFilter()->getType()->dims());
+      auto pads = PaddingTLBR(CC->getPads());
+
+      std::vector<std::string> options;
+
+      if (clSpecializeConvolutionK) {
+        // Specialize convolutionK aggressively, similar to conv_forward_mem
+        if (CC->getGroup() == 1)
+          addIntOption(options, "CONVK_GROUP", 1);
+        if (idim.n == 1)
+          addIntOption(options, "CONVK_BATCHES", 1);
+        addIntOption(options, "CONVK_DILATION", CC->getDilation());
+        addIntOption(options, "CONVK_KERNEL_W", kdim.width);
+        addIntOption(options, "CONVK_KERNEL_H", kdim.height);
+        addIntOption(options, "CONVK_STRIDES_W", sdim.width);
+        addIntOption(options, "CONVK_STRIDES_H", sdim.height);
+        addIntOption(options, "CONVK_IDIM_W", idim.w);
+        addIntOption(options, "CONVK_IDIM_H", idim.h);
+        addIntOption(options, "CONVK_IDIM_C", idim.c);
+        addIntOption(options, "CONVK_ODIM_W", odim.w);
+        addIntOption(options, "CONVK_ODIM_H", odim.h);
+        addIntOption(options, "CONVK_ODIM_C", odim.c);
+        addIntOption(options, "CONVK_PADS_TOP", pads.top);
+        addIntOption(options, "CONVK_PADS_LEFT", pads.left);
+        addIntOption(options, "CONVK_FILTER_W", kernelSize.w);
+        addIntOption(options, "CONVK_FILTER_H", kernelSize.h);
+        addIntOption(options, "CONVK_FILTER_C", kernelSize.c);
+        addIntOption(options, "CONVK_SPECIALIZED", 1);
+      }
+
+      cl_program specializedProg = createProgram(src, options, commands);
+      cl_kernel kernel = createKernel(kernelName, specializedProg);
+      setKernelArg(kernel, 0, deviceBuffer);
+      auto numArgs = setKernelArgsForBuffers(kernel, I, 1, runtimeBundle_);
+
       setKernelArg(kernel, numArgs + 1, kdim);
       setKernelArg(kernel, numArgs + 2, sdim);
       setKernelArg(kernel, numArgs + 3, pads);
@@ -1154,8 +1206,8 @@ Error OpenCLFunction::execute(ExecutionContext *context) {
       setKernelArg(kernel, numArgs + 5, CC->getDilation());
       setKernelArg(kernel, numArgs + 6, odim);
       setKernelArg(kernel, numArgs + 7, idim);
-      setKernelArg(kernel, numArgs + 8,
-                   ShapeNHWC(CC->getFilter()->getType()->dims()));
+      setKernelArg(kernel, numArgs + 8, kernelSize);
+
       if (isQuantized) {
         auto srcTy = CC->getSrc()->getType();
         auto destTy = CC->getDest()->getType();

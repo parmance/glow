@@ -93,6 +93,13 @@ size_t getNHWC(ShapeNHWC s, cl_uint32_t n, cl_uint32_t h, cl_uint32_t w,
   return (n * s.c * s.w * s.h) + (h * s.c * s.w) + (w * s.c) + c;
 }
 
+/// \returns the index of the element at n, h, w, c with the dimensions
+/// given as scalar arguments instead of a struct.
+size_t getNHWC_s(dim_t sw, dim_t sh, dim_t sc, cl_uint32_t n, cl_uint32_t h,
+                 cl_uint32_t w, cl_uint32_t c) {
+  return (n * sc * sw * sh) + (h * sc * sw) + (w * sc) + c;
+}
+
 /// \returns the index of the element at n, c, h, w.
 size_t getNCHW(ShapeNCHW s, cl_uint32_t n, cl_uint32_t c, cl_uint32_t h,
                cl_uint32_t w) {
@@ -910,7 +917,7 @@ __kernel void localresponsenormalizationW(__global void *mem, unsigned dest,
   unsigned w = get_global_id(2);
   // For every channel:
   for (unsigned c = 0; c < dim.c; c++) {
-    float squareSum = 0.0;
+    float squareSum = 0.0f;
     for (unsigned i = (c >= halfWindowSize ? c - halfWindowSize : 0);
          i <= min(c + halfWindowSize, (unsigned)dim.c - 1); i++) {
       float val = inW[getNHWC(dim, n, h, w, i)];
@@ -944,7 +951,7 @@ __kernel void localresponsenormalizationgradW(__global void *mem, unsigned dest,
   unsigned h = get_global_id(1);
   unsigned w = get_global_id(2);
 
-  float sum = 0.0;
+  float sum = 0.0f;
 
   // Compute sum for first channel.
   for (unsigned c = 0; c <= halfWindowSize && c < dim.c; c++) {
@@ -1027,50 +1034,147 @@ __kernel void softmaxgradW(__global void *mem, cl_uint32_t origDest,
   softmaxgradK(&mem[srcGrad], &mem[origDest], &mem[selected], sliceSize);
 }
 
+// Aggressive compile-time specialization of convolution parameters.
+#ifndef CONVK_GROUP
+#define CONVK_GROUP group
+#endif
+
+#ifndef CONVK_BATCHES
+#define CONVK_BATCHES idim.n
+#endif
+
+#ifndef CONVK_DILATION
+#define CONVK_DILATION dilation
+#endif
+
+#ifndef CONVK_KERNEL_W
+#define CONVK_KERNEL_W kernelSizes.width
+#endif
+
+#ifndef CONVK_KERNEL_H
+#define CONVK_KERNEL_H kernelSizes.height
+#endif
+
+#ifndef CONVK_STRIDES_W
+#define CONVK_STRIDES_W strides.width
+#endif
+
+#ifndef CONVK_STRIDES_H
+#define CONVK_STRIDES_H strides.height
+#endif
+
+#ifndef CONVK_IDIM_W
+#define CONVK_IDIM_W idim.w
+#endif
+
+#ifndef CONVK_IDIM_H
+#define CONVK_IDIM_H idim.h
+#endif
+
+#ifndef CONVK_IDIM_C
+#define CONVK_IDIM_C idim.c
+#endif
+
+#ifndef CONVK_ODIM_W
+#define CONVK_ODIM_W odim.w
+#endif
+
+#ifndef CONVK_ODIM_H
+#define CONVK_ODIM_H odim.h
+#endif
+
+#ifndef CONVK_ODIM_C
+#define CONVK_ODIM_C odim.c
+#endif
+
+#ifndef CONVK_FILTER_W
+#define CONVK_FILTER_W filterDim.w
+#endif
+
+#ifndef CONVK_FILTER_H
+#define CONVK_FILTER_H filterDim.h
+#endif
+
+#ifndef CONVK_FILTER_C
+#define CONVK_FILTER_C filterDim.c
+#endif
+
+#ifndef CONVK_PADS_TOP
+#define CONVK_PADS_TOP pads.top
+#endif
+
+#ifndef CONVK_PADS_LEFT
+#define CONVK_PADS_LEFT pads.left
+#endif
+
 __kernel void convolutionK(__global float *dest, __global float *src,
                            __global float *filter, __global float *bias,
                            ShapeHW kernelSizes, ShapeHW strides,
                            PaddingTLBR pads, cl_uint32_t group,
                            cl_uint32_t dilation, ShapeNHWC odim, ShapeNHWC idim,
                            ShapeNHWC filterDim) {
+
   size_t ax = get_global_id(0);
   size_t ay = get_global_id(1);
   size_t d = get_global_id(2);
-  size_t inCperG = idim.c / group;
-  size_t outCperG = odim.c / group;
+  size_t inCperG = CONVK_IDIM_C / CONVK_GROUP;
+  size_t outCperG = CONVK_ODIM_C / CONVK_GROUP;
   size_t inChannelOffset = d / outCperG * inCperG;
 
   typedef int ssize_t;
   // For each convolution 'jump' in the input tensor:
-  ssize_t x = -(ssize_t)pads.top + ax * strides.height;
-  ssize_t y = -(ssize_t)pads.left + ay * strides.width;
+  ssize_t x = -(ssize_t)CONVK_PADS_TOP + ax * CONVK_STRIDES_H;
+  ssize_t y = -(ssize_t)CONVK_PADS_LEFT + ay * CONVK_STRIDES_W;
+
+#define X_MIN -(ssize_t)CONVK_PADS_TOP
+#define Y_MIN -(ssize_t)CONVK_PADS_LEFT
+
+#define X_MAX (X_MIN + (CONVK_ODIM_H - 1) * CONVK_STRIDES_H)
+#define Y_MAX (Y_MIN + (CONVK_ODIM_W - 1) * CONVK_STRIDES_W)
 
   // For each input in the batch:
-  for (size_t n = 0; n < idim.n; n++) {
+  for (size_t n = 0; n < CONVK_BATCHES; n++) {
 
     // For each element in the convolution-filter:
     float sum = 0;
-    for (size_t fx = 0; fx < kernelSizes.height; fx++) {
-      for (size_t fy = 0; fy < kernelSizes.width; fy++) {
-        ssize_t ox = x + fx * dilation;
-        ssize_t oy = y + fy * dilation;
+    for (size_t fx = 0; fx < CONVK_KERNEL_H; fx++) {
+      for (size_t fy = 0; fy < CONVK_KERNEL_W; fy++) {
+        ssize_t ox = x + fx * CONVK_DILATION;
+        ssize_t oy = y + fy * CONVK_DILATION;
 
+#define OX_MAX (X_MAX + (CONVK_KERNEL_H - 1) * CONVK_DILATION)
+#define OY_MAX (Y_MAX + (CONVK_KERNEL_W - 1) * CONVK_DILATION)
+
+#ifdef CONVK_SPECIALIZED
         // Ignore index access below zero (this is due to padding).
-        if (ox < 0 || oy < 0 || ox >= (ssize_t)idim.h ||
-            oy >= (ssize_t)idim.w) {
+        // Use compile time evaluated predicates to expose branches
+        // that will never be taken and thus can be removed at compile
+        // time.
+        if ((X_MIN < 0 && ox < 0) || (Y_MIN < 0 && oy < 0) ||
+            (OX_MAX >= (ssize_t)CONVK_IDIM_H && ox >= (ssize_t)CONVK_IDIM_H) ||
+            (OY_MAX >= (ssize_t)CONVK_IDIM_W && oy >= (ssize_t)CONVK_IDIM_W)) {
           continue;
         }
-
+#else
+        // Ignore index access below zero (this is due to padding).
+        if (ox < 0 || oy < 0 || ox >= (ssize_t)CONVK_IDIM_H ||
+            oy >= (ssize_t)CONVK_IDIM_W) {
+          continue;
+        }
+#endif
         for (size_t fd = 0; fd < inCperG; fd++) {
-          sum += filter[getNHWC(filterDim, d, fx, fy, fd)] *
-                 src[getNHWC(idim, n, (size_t)ox, (size_t)oy,
-                             fd + inChannelOffset)];
+          sum += filter[getNHWC_s(CONVK_FILTER_W, CONVK_FILTER_H,
+                                  CONVK_FILTER_C, d, fx, fy, fd)] *
+                 src[getNHWC_s(CONVK_IDIM_W, CONVK_IDIM_H, CONVK_IDIM_C, n,
+                               (cl_uint32_t)ox, (cl_uint32_t)oy,
+                               fd + inChannelOffset)];
         }
       }
     }
 
     sum += bias[d];
-    dest[getNHWC(odim, n, ax, ay, d)] = sum;
+    dest[getNHWC_s(CONVK_ODIM_W, CONVK_ODIM_H, CONVK_ODIM_C, n, ax, ay, d)] =
+        sum;
   } // N
 }
 
@@ -1380,7 +1484,7 @@ __kernel void maxpoolwithargmaxgradK(
     // Clear srcGrad
     for (size_t x = 0; x < srcGradDim.h; x++) {
       for (size_t y = 0; y < srcGradDim.w; y++) {
-        srcGrad[getNHWC(srcGradDim, n, x, y, z)] = 0.0;
+        srcGrad[getNHWC(srcGradDim, n, x, y, z)] = 0.0f;
       }
     }
 
