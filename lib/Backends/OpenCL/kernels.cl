@@ -127,6 +127,10 @@ float dequantize(cl_int8_t input, float scale, cl_int32_t offset) {
   return scale * (input - offset);
 }
 
+// Computes pow(x, y) as exp2(y * log2(x)) when x > 0.0f, as suggested
+// by OpenCL 2.0 specs Table 38.
+#define FAST_POW(X, Y) X > 0.0f ? exp2(Y *log2(X)) : pow(X, Y)
+
 __kernel void quantize_i8K(__global cl_int8_t *dest, __global float *src,
                            float scale, cl_int32_t offset) {
   dim_t i = get_global_id(0);
@@ -506,7 +510,7 @@ DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementmul, float, LHS *RHS)
 DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementdiv, float, LHS / RHS)
 DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementmax, float, max(LHS, RHS))
 DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementmin, float, min(LHS, RHS))
-DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementpow, float, pow(LHS, RHS))
+DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL(elementpow, float, FAST_POW(LHS, RHS))
 
 DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL_QUANTIZED(elementadd, LHS + RHS)
 DEFINE_OPENCL_BINARY_DATA_PARALLEL_KERNEL_QUANTIZED(elementsub, LHS - RHS)
@@ -949,7 +953,7 @@ __kernel void localresponsenormalizationW(__global void *mem, unsigned dest,
     // This will be used to accelerate the backward pass.
     scaleCache[getNHWC(dim, n, h, w, c)] = scale;
 
-    float normFactor = pow(scale, -beta);
+    float normFactor = FAST_POW(scale, -beta);
     outW[getNHWC(dim, n, h, w, c)] = inW[getNHWC(dim, n, h, w, c)] * normFactor;
   }
 }
@@ -988,7 +992,7 @@ __kernel void localresponsenormalizationgradW(__global void *mem, unsigned dest,
     float inw = inW[getNHWC(dim, n, h, w, c)];
 
     inG[getNHWC(dim, n, h, w, c)] =
-        outg * pow(scale, -beta) - 2 * normedAlpha * beta * inw * sum;
+        outg * FAST_POW(scale, -beta) - 2 * normedAlpha * beta * inw * sum;
 
     // Modify sum for next channel.
     unsigned subIndex = c - halfWindowSize;
