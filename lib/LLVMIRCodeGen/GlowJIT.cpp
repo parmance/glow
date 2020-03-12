@@ -93,8 +93,8 @@ public:
     // attempt to perform debug registration."' failed.
     // dbgRegistrationListener_->NotifyObjectEmitted(loadedObj, objInfo);
 #else
-    dbgRegistrationListener_->notifyObjectLoaded(
-        (llvm::JITEventListener::ObjectKey)&loadedObj, loadedObj, objInfo);
+//    dbgRegistrationListener_->notifyObjectLoaded(
+//        (llvm::JITEventListener::ObjectKey)&loadedObj, loadedObj, objInfo);
 #endif
 
     // Dump symbol information for the JITed symbols.
