@@ -687,6 +687,7 @@ TEST(DeviceManagerTest, SetDeviceMemory) {
 }
 
 TEST(DeviceManagerTest, AvailableMemory) {
+  CHECK_IF_ENABLED();
   std::vector<std::unique_ptr<CompiledFunction>> backing;
   std::promise<const Module *> promise;
   std::future<const Module *> future;
