@@ -614,15 +614,3 @@ add_custom_command(
     COMMAND include-bin "${GLOW_BINARY_DIR}/tests/${TEST_LIBJIT}.bc" "${GLOW_BINARY_DIR}/glow/CPU/${TEST_LIBJIT}_bc.inc"
     DEPENDS ${GLOW_BINARY_DIR}/tests/${TEST_LIBJIT}.bc
     WORKING_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}")
-add_executable(CPUJITTest
-    CPUJITTest.cpp ${GLOW_BINARY_DIR}/glow/CPU/${TEST_LIBJIT}_bc.inc)
-target_link_libraries(CPUJITTest
-    PRIVATE
-    Backends
-    ExecutionEngine
-    Graph
-    Support
-    gtest
-    TestMain)
-add_custom_target(CPUJITTest_libjit SOURCES ${TEST_LIBJIT}.cpp)
-add_glow_test(CPUJITTest ${GLOW_BINARY_DIR}/tests/CPUJITTest --gtest_output=xml:CPUJITTest.xml)
