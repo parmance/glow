@@ -505,8 +505,6 @@ void OpenCLFunction::enqueueKernel(llvm::StringRef name,
                                    cl_device_id device,
                                    llvm::ArrayRef<size_t> global,
                                    std::vector<KernelLaunch> &kernelLaunches) {
-  llvm::SmallVector<size_t, 4> local(global.size(), 0);
-  getMaxLocalWorkgroupSize(kernel, device, global, local);
   char kernelType[128];
   size_t retSize;
   cl_int err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME,
@@ -516,7 +514,7 @@ void OpenCLFunction::enqueueKernel(llvm::StringRef name,
   cl_event event{nullptr};
   bool profile = kernelProfiling_;
   err = clEnqueueNDRangeKernel(commands, kernel, global.size(), nullptr,
-                               &global[0], &local[0], 0, nullptr,
+                               &global[0], nullptr, 0, nullptr,
                                profile ? &event : nullptr);
   CHECK_EQ(err, CL_SUCCESS) << "Error in clEnqueueNDRangeKernel.";
   kernelLaunches.push_back(
